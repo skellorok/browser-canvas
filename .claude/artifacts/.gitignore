@@ -1,0 +1,15 @@
+# Server state (regenerated on startup)
+server.json
+_server.log
+
+# Per-canvas transient files
+*/_log.jsonl
+*/_screenshot.png
+*/_request.json
+*/_state.json
+
+# Legacy files (migrated to _log.jsonl)
+*/events.jsonl
+*/_notices.jsonl
+*/_error.txt
+*/_warnings.jsonl

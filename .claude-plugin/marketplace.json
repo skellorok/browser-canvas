@@ -1,0 +1,21 @@
+{
+  "name": "browser-canvas-marketplace",
+  "owner": {
+    "name": "Parker Hancock",
+    "url": "https://github.com/parkerhancock/browser-canvas"
+  },
+  "metadata": {
+    "description": "Render React UIs in the browser using file operations",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "browser-canvas",
+      "source": "./",
+      "description": "Create interactive React UIs by writing files. Use for forms, charts, dashboards, and visual interfaces.",
+      "skills": [
+        "./skills/canvas"
+      ]
+    }
+  ]
+}
