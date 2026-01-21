@@ -5,22 +5,30 @@
 <h1 align="center">Browser Canvas</h1>
 
 <p align="center">
-  <strong>Render React UIs in the browser using only file operations</strong>
+  <strong>Render interactive UIs in the browser using only file operations</strong>
 </p>
 
 <p align="center">
   <a href="#quick-start">Quick Start</a> •
   <a href="#features">Features</a> •
-  <a href="#components">Components</a> •
+  <a href="#react-mode">React</a> •
+  <a href="#vanilla-mode">Vanilla</a> •
   <a href="#documentation">Docs</a>
 </p>
 
 ---
 
-**Browser Canvas** lets Claude Code create interactive UIs by writing files. No API calls, no special protocols—just write `App.jsx` and watch it render.
+**Browser Canvas** lets Claude Code create interactive UIs by writing files. No API calls, no special protocols—just write a file and watch it render.
+
+**Two modes, same workflow:**
+
+| Mode | File | Stack |
+|------|------|-------|
+| React | `App.jsx` | shadcn/ui + Tailwind + React hooks |
+| Vanilla | `index.html` | Pure HTML/CSS/JS, CSS variables |
 
 ```
-Write App.jsx → Browser opens → Edit file → Hot reload → Read _log.jsonl
+Write App.jsx or index.html → Browser opens → Edit file → Hot reload → Read _log.jsonl
 ```
 
 ## Quick Start
@@ -49,13 +57,31 @@ The server watches `.claude/artifacts/` in your current directory. When Claude C
 
 ### How It Works
 
-Once the server is running, Claude Code creates UIs by writing files:
+Once the server is running, Claude Code creates UIs by writing files. The server auto-detects the mode based on filename:
 
 ```
-.claude/artifacts/my-app/App.jsx  →  Browser opens  →  Hot reload on edit
+.claude/artifacts/my-app/App.jsx     →  React mode (shadcn/ui, Tailwind)
+.claude/artifacts/my-app/index.html  →  Vanilla mode (pure HTML/CSS/JS)
 ```
 
-Example component Claude might write:
+Both modes share the same file protocol (`_state.json`, `_log.jsonl`) and API.
+
+## Features
+
+| Feature | How It Works |
+|---------|--------------|
+| **Dual Mode** | React (`App.jsx`) or Vanilla (`index.html`) — auto-detected |
+| **Hot Reload** | Edit files → browser updates instantly |
+| **Unified Log** | Events, errors, validation → `_log.jsonl` (grep-friendly) |
+| **Two-Way State** | Agent writes `_state.json` ↔ canvas reads/writes |
+| **TypeScript API** | `CanvasClient` for screenshots, close, state operations |
+| **Validation** | ESLint, scope checking, Tailwind, accessibility (axe-core) |
+| **Auto-Feedback** | PostToolUse hook injects validation errors after writes |
+| **Multi-Canvas** | Toolbar dropdown switches between artifacts |
+
+## React Mode
+
+Write `App.jsx` for rapid prototyping with pre-bundled components:
 
 ```jsx
 function App() {
@@ -71,19 +97,7 @@ function App() {
 }
 ```
 
-## Features
-
-| Feature | How It Works |
-|---------|--------------|
-| **Hot Reload** | Edit `App.jsx` → browser updates instantly |
-| **Unified Log** | Events, errors, validation → `_log.jsonl` (grep-friendly) |
-| **Two-Way State** | Agent writes `_state.json` ↔ canvas reads/writes via `useCanvasState()` |
-| **TypeScript API** | `CanvasClient` for screenshots, close, state operations |
-| **Validation** | ESLint, scope checking, Tailwind, accessibility (axe-core) |
-| **Auto-Feedback** | PostToolUse hook injects validation errors after writes |
-| **Multi-Canvas** | Toolbar dropdown switches between artifacts |
-
-## Components
+### Components
 
 Everything is pre-bundled and available without imports:
 
@@ -97,32 +111,99 @@ Everything is pre-bundled and available without imports:
 
 **Utilities** — `cn()` for classNames, `format()` from date-fns, `Markdown`, `remarkGfm`, Tailwind CSS
 
+## Vanilla Mode
+
+Write `index.html` for standards-based, portable artifacts:
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>My App</title>
+  <link rel="stylesheet" href="/base.css">
+</head>
+<body>
+  <main class="container">
+    <article class="card">
+      <header class="card-header"><h2>Counter</h2></header>
+      <div class="card-body">
+        <p class="count" id="count">0</p>
+        <button id="increment">+</button>
+      </div>
+    </article>
+  </main>
+
+  <script type="module">
+    let count = 0
+    document.getElementById('increment').onclick = () => {
+      count++
+      document.getElementById('count').textContent = count
+      window.canvasEmit('incremented', { count })
+    }
+  </script>
+</body>
+</html>
+```
+
+### Vanilla Features
+
+- **No build step** — Files served directly
+- **CSS variables** — `/base.css` provides theming (`--color-primary`, `--space-4`, etc.)
+- **Native elements** — `<dialog>`, `<details>`, `<select>`, `<input type="date">`
+- **Import maps** — Load libraries from CDN without bundling
+- **Web components** — Define custom elements for composition
+- **Portable** — Works without the server
+
+### Using Libraries
+
+```html
+<script type="importmap">
+{
+  "imports": {
+    "chart.js": "https://cdn.jsdelivr.net/npm/chart.js@4/auto/+esm",
+    "marked": "https://cdn.jsdelivr.net/npm/marked@15/+esm"
+  }
+}
+</script>
+
+<script type="module">
+  import Chart from 'chart.js'
+  import { marked } from 'marked'
+</script>
+```
+
 ## Two-Way State Sync
 
-For stateful artifacts, `useCanvasState()` provides bidirectional communication:
+Both modes support bidirectional state via `_state.json`.
+
+**React** — Use the `useCanvasState()` hook:
 
 ```jsx
 function App() {
   const [state, setState] = useCanvasState();
   return (
-    <div>
-      <p>{state.message || "Waiting for agent..."}</p>
-      <Button onClick={() => setState({ ...state, confirmed: true })}>
-        Confirm
-      </Button>
-    </div>
+    <Button onClick={() => setState({ ...state, confirmed: true })}>
+      {state.message || "Confirm"}
+    </Button>
   );
 }
 ```
 
-Agent reads/writes `_state.json`:
-```bash
-# Agent sets initial state
-echo '{"message":"Please confirm"}' > .claude/artifacts/my-app/_state.json
+**Vanilla** — Use `window.canvasState()`:
 
-# Agent reads state after user interaction
+```javascript
+// Read state
+const state = await window.canvasState()
+
+// Update state
+await window.canvasState({ ...state, confirmed: true })
+```
+
+**Agent** reads/writes `_state.json`:
+```bash
+echo '{"message":"Please confirm"}' > .claude/artifacts/my-app/_state.json
 cat .claude/artifacts/my-app/_state.json
-# {"message":"Please confirm","confirmed":true}
 ```
 
 ## TypeScript API
@@ -162,11 +243,16 @@ Notice categories: `runtime`, `lint`, `eslint`, `scope`, `tailwind`, `overflow`,
 .claude/artifacts/
 ├── server.json              # Server state (port, active canvases)
 ├── _server.log              # Server logs
-└── my-canvas/
-    ├── App.jsx              # Your component
-    ├── _log.jsonl           # Unified log (events, errors, validation)
-    ├── _state.json          # Two-way state
-    └── _screenshot.png      # Screenshot output (via API)
+├── react-app/               # React mode
+│   ├── App.jsx              # React component
+│   ├── _log.jsonl           # Unified log
+│   ├── _state.json          # Two-way state
+│   └── _screenshot.png      # Screenshot
+└── vanilla-app/             # Vanilla mode
+    ├── index.html           # HTML/CSS/JS
+    ├── _log.jsonl           # Same log format
+    ├── _state.json          # Same state sync
+    └── _screenshot.png      # Same screenshot API
 ```
 
 ## Configuration
