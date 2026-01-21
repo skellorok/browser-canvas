@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Web Components Demo</title>
+  <link rel="stylesheet" href="/base.css">
+  <style>
+    .demo {
+      padding: var(--space-6);
+      max-width: 64rem;
+      margin: 0 auto;
+      display: grid;
+      gap: var(--space-6);
+    }
+  </style>
+
+  <!-- Define components inline - no build step, no infrastructure -->
+  <script>
+    // Stat Card Component
+    class StatCard extends HTMLElement {
+      connectedCallback() {
+        const value = this.getAttribute('value') || '0'
+        const label = this.getAttribute('label') || 'Label'
+        const trend = this.getAttribute('trend')
+
+        this.innerHTML = `
+          <article class="card" style="padding: var(--space-4);">
+            <div style="font-size: var(--text-2xl); font-weight: 700; color: var(--color-primary);">
+              ${value}
+              ${trend ? `<span style="font-size: var(--text-sm); color: ${trend.startsWith('+') ? 'var(--color-success)' : 'var(--color-danger)'};">${trend}</span>` : ''}
+            </div>
+            <div style="font-size: var(--text-sm); color: var(--color-muted);">${label}</div>
+          </article>
+        `
+      }
+    }
+    customElements.define('stat-card', StatCard)
+
+    // Data Table Component
+    class DataTable extends HTMLElement {
+      connectedCallback() {
+        const columns = JSON.parse(this.getAttribute('columns') || '[]')
+        const data = JSON.parse(this.getAttribute('data') || '[]')
+
+        this.innerHTML = `
+          <table>
+            <thead>
+              <tr>${columns.map(col => `<th>${col.label}</th>`).join('')}</tr>
+            </thead>
+            <tbody>
+              ${data.map(row => `
+                <tr>${columns.map(col => `<td>${row[col.key]}</td>`).join('')}</tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `
+      }
+    }
+    customElements.define('data-table', DataTable)
+
+    // Confirm Dialog Component
+    class ConfirmDialog extends HTMLElement {
+      connectedCallback() {
+        const title = this.getAttribute('title') || 'Confirm'
+        const message = this.getAttribute('message') || 'Are you sure?'
+        const confirmText = this.getAttribute('confirm-text') || 'Confirm'
+        const cancelText = this.getAttribute('cancel-text') || 'Cancel'
+
+        this.innerHTML = `
+          <dialog>
+            <form method="dialog">
+              <h3 style="margin-bottom: var(--space-2);">${title}</h3>
+              <p style="color: var(--color-muted); margin-bottom: var(--space-4);">${message}</p>
+              <div style="display: flex; gap: var(--space-2); justify-content: flex-end;">
+                <button value="cancel" class="secondary">${cancelText}</button>
+                <button value="confirm">${confirmText}</button>
+              </div>
+            </form>
+          </dialog>
+        `
+
+        this.dialog = this.querySelector('dialog')
+      }
+
+      show() {
+        this.dialog.showModal()
+        return new Promise(resolve => {
+          this.dialog.addEventListener('close', () => {
+            resolve(this.dialog.returnValue === 'confirm')
+          }, { once: true })
+        })
+      }
+    }
+    customElements.define('confirm-dialog', ConfirmDialog)
+
+    // Tabs Component
+    class TabGroup extends HTMLElement {
+      connectedCallback() {
+        const tabs = Array.from(this.querySelectorAll('tab-panel'))
+        const labels = tabs.map(t => t.getAttribute('label'))
+
+        const tabList = document.createElement('div')
+        tabList.setAttribute('role', 'tablist')
+        tabList.style.cssText = 'display: flex; gap: var(--space-1); border-bottom: 1px solid var(--color-border); margin-bottom: var(--space-4);'
+
+        labels.forEach((label, i) => {
+          const btn = document.createElement('button')
+          btn.textContent = label
+          btn.setAttribute('role', 'tab')
+          btn.style.cssText = 'padding: var(--space-2) var(--space-4); border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px;'
+          if (i === 0) {
+            btn.style.borderBottomColor = 'var(--color-primary)'
+            btn.style.color = 'var(--color-primary)'
+          }
+          btn.onclick = () => this.selectTab(i)
+          tabList.appendChild(btn)
+        })
+
+        this.prepend(tabList)
+        this.selectTab(0)
+      }
+
+      selectTab(index) {
+        const tabs = Array.from(this.querySelectorAll('tab-panel'))
+        const buttons = Array.from(this.querySelectorAll('[role="tab"]'))
+
+        tabs.forEach((t, i) => t.hidden = i !== index)
+        buttons.forEach((b, i) => {
+          b.style.borderBottomColor = i === index ? 'var(--color-primary)' : 'transparent'
+          b.style.color = i === index ? 'var(--color-primary)' : 'inherit'
+        })
+      }
+    }
+    customElements.define('tab-group', TabGroup)
+
+    class TabPanel extends HTMLElement {}
+    customElements.define('tab-panel', TabPanel)
+  </script>
+</head>
+<body>
+  <main class="demo">
+    <header>
+      <h1>Web Components Demo</h1>
+      <p class="text-muted">Standards-based composition - no build step required</p>
+    </header>
+
+    <!-- Stat Cards -->
+    <section style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--space-4);">
+      <stat-card value="$12,456" label="Revenue" trend="+12%"></stat-card>
+      <stat-card value="342" label="Orders" trend="+8%"></stat-card>
+      <stat-card value="1,247" label="Customers" trend="-2%"></stat-card>
+      <stat-card value="4.2%" label="Conversion"></stat-card>
+    </section>
+
+    <!-- Tabs -->
+    <section class="card">
+      <div class="card-body">
+        <tab-group>
+          <tab-panel label="Overview">
+            <h3>Overview Content</h3>
+            <p>This is the overview tab. Native tab switching with zero dependencies.</p>
+          </tab-panel>
+          <tab-panel label="Analytics">
+            <h3>Analytics Content</h3>
+            <p>Charts and metrics would go here.</p>
+          </tab-panel>
+          <tab-panel label="Settings">
+            <h3>Settings Content</h3>
+            <p>Configuration options.</p>
+          </tab-panel>
+        </tab-group>
+      </div>
+    </section>
+
+    <!-- Data Table -->
+    <section class="card">
+      <header class="card-header">
+        <h2>Recent Orders</h2>
+      </header>
+      <div class="card-body" style="padding: 0;">
+        <data-table
+          columns='[{"key":"id","label":"Order ID"},{"key":"customer","label":"Customer"},{"key":"amount","label":"Amount"},{"key":"status","label":"Status"}]'
+          data='[{"id":"ORD-001","customer":"Alice","amount":"$125.00","status":"Delivered"},{"id":"ORD-002","customer":"Bob","amount":"$89.50","status":"Shipped"},{"id":"ORD-003","customer":"Carol","amount":"$234.00","status":"Pending"}]'
+        ></data-table>
+      </div>
+    </section>
+
+    <!-- Dialog Demo -->
+    <section class="card">
+      <div class="card-body">
+        <h3>Dialog Component</h3>
+        <button id="show-dialog">Delete Item</button>
+        <confirm-dialog
+          id="delete-confirm"
+          title="Delete Item"
+          message="This action cannot be undone. Are you sure?"
+          confirm-text="Delete"
+        ></confirm-dialog>
+      </div>
+    </section>
+  </main>
+
+  <script type="module">
+    document.getElementById('show-dialog').onclick = async () => {
+      const confirmed = await document.getElementById('delete-confirm').show()
+      window.canvasEmit('dialog-result', { confirmed })
+    }
+  </script>
+</body>
+</html>

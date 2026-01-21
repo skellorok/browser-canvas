@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Canvas</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      height: 100%;
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #f5f5f5;
+    }
+
+    .shell {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 0.5rem 1rem;
+      background: #fff;
+      border-bottom: 1px solid #e5e5e5;
+      font-size: 0.875rem;
+    }
+
+    .header h1 {
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: #666;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 0.25rem;
+      flex: 1;
+    }
+
+    .tab {
+      padding: 0.375rem 0.75rem;
+      background: none;
+      border: none;
+      border-radius: 0.25rem;
+      cursor: pointer;
+      font-size: 0.8125rem;
+      color: #666;
+    }
+
+    .tab:hover {
+      background: #f0f0f0;
+    }
+
+    .tab.active {
+      background: #e5e5e5;
+      color: #111;
+    }
+
+    .tab .close {
+      margin-left: 0.5rem;
+      opacity: 0.5;
+    }
+
+    .tab .close:hover {
+      opacity: 1;
+    }
+
+    .content {
+      flex: 1;
+      position: relative;
+    }
+
+    .canvas-frame {
+      position: absolute;
+      inset: 0;
+      border: none;
+      background: #fff;
+    }
+
+    .empty {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: #999;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      html, body {
+        background: #1a1a1a;
+      }
+      .header {
+        background: #222;
+        border-color: #333;
+      }
+      .header h1 {
+        color: #999;
+      }
+      .tab {
+        color: #999;
+      }
+      .tab:hover {
+        background: #333;
+      }
+      .tab.active {
+        background: #444;
+        color: #fff;
+      }
+      .empty {
+        color: #666;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="header">
+      <h1>Canvas</h1>
+      <nav class="tabs" id="tabs"></nav>
+    </header>
+    <main class="content" id="content">
+      <div class="empty">No canvases open</div>
+    </main>
+  </div>
+
+  <script type="module">
+    const tabs = document.getElementById("tabs")
+    const content = document.getElementById("content")
+    let activeCanvas = null
+    let canvases = []
+
+    // WebSocket for canvas list updates
+    const ws = new WebSocket(`ws://${location.host}/ws?canvas=_shell`)
+
+    ws.onmessage = (e) => {
+      const msg = JSON.parse(e.data)
+      if (msg.type === "canvases-updated") {
+        loadCanvases()
+      }
+    }
+
+    // Load canvas list
+    async function loadCanvases() {
+      const res = await fetch("/api/canvases")
+      const data = await res.json()
+      canvases = data.canvases
+
+      // Auto-select first canvas if none active
+      if (canvases.length > 0 && !activeCanvas) {
+        selectCanvas(canvases[0])
+      } else if (canvases.length === 0) {
+        activeCanvas = null
+        renderTabs()
+        renderContent()
+      } else {
+        renderTabs()
+      }
+    }
+
+    function selectCanvas(id) {
+      activeCanvas = id
+      renderTabs()
+      renderContent()
+    }
+
+    function renderTabs() {
+      tabs.innerHTML = canvases.map(id => `
+        <button class="tab ${id === activeCanvas ? "active" : ""}" data-id="${id}">
+          ${id}
+          <span class="close" data-close="${id}">×</span>
+        </button>
+      `).join("")
+
+      // Tab click handlers
+      tabs.querySelectorAll(".tab").forEach(tab => {
+        tab.addEventListener("click", (e) => {
+          if (e.target.classList.contains("close")) {
+            const id = e.target.dataset.close
+            closeCanvas(id)
+          } else {
+            selectCanvas(tab.dataset.id)
+          }
+        })
+      })
+    }
+
+    function renderContent() {
+      if (!activeCanvas) {
+        content.innerHTML = '<div class="empty">No canvases open</div>'
+        return
+      }
+
+      content.innerHTML = `
+        <iframe
+          class="canvas-frame"
+          src="/canvas/${activeCanvas}"
+          sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+        ></iframe>
+      `
+    }
+
+    async function closeCanvas(id) {
+      await fetch(`/api/canvas/${id}/close`, { method: "POST" })
+      canvases = canvases.filter(c => c !== id)
+      if (activeCanvas === id) {
+        activeCanvas = canvases[0] || null
+      }
+      renderTabs()
+      renderContent()
+    }
+
+    // Poll for new canvases (simpler than watching filesystem from browser)
+    setInterval(loadCanvases, 2000)
+
+    // Initial load
+    loadCanvases()
+  </script>
+</body>
+</html>

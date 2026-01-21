@@ -1,0 +1,5 @@
+{"type":"error","message":"Uncaught TypeError: Cannot read properties of undefined (reading 'forEach') at http://localhost:3210/canvas/counter:114:27","timestamp":"2026-01-21T16:53:08.380Z"}
+{"type":"error","message":"Uncaught TypeError: Cannot read properties of undefined (reading 'forEach') at http://localhost:3210/canvas/counter:114:27","timestamp":"2026-01-21T16:54:20.835Z"}
+{"type":"event","event":"count-changed","data":{"count":1},"timestamp":"2026-01-21T16:56:59.681Z"}
+{"type":"event","event":"count-changed","data":{"count":2},"timestamp":"2026-01-21T16:56:59.911Z"}
+{"type":"event","event":"count-changed","data":{"count":3},"timestamp":"2026-01-21T16:57:00.127Z"}

@@ -1,6 +1,6 @@
 import { Hono } from "hono"
 import { serveStatic } from "hono/bun"
-import { mkdir, writeFile, appendFile, readdir, stat } from "fs/promises"
+import { mkdir, writeFile, appendFile, readdir, stat, readFile } from "fs/promises"
 import { join, dirname } from "path"
 import { startWatcher } from "./watcher"
 import {
@@ -46,6 +46,11 @@ import {
   waitForValidation,
   isValidationPending,
 } from "./validation-status"
+import {
+  injectVanillaBridge,
+  readVanillaCanvas,
+  detectCanvasMode,
+} from "./vanilla"
 
 // Port 0 = OS assigns available port; actual port captured after server starts
 let serverPort = 0
@@ -121,27 +126,21 @@ async function readCanvasStateDirect(canvasId: string): Promise<Record<string, u
   }
 }
 
-// Scan for all artifact folders containing App.jsx
-async function getAllArtifacts(): Promise<Array<{ id: string; name: string; hasCode: boolean }>> {
+// Scan for all artifact folders containing App.jsx or index.html
+async function getAllArtifacts(): Promise<Array<{ id: string; name: string; hasCode: boolean; mode: "react" | "vanilla" }>> {
   try {
     const entries = await readdir(CANVAS_DIR, { withFileTypes: true })
-    const artifacts: Array<{ id: string; name: string; hasCode: boolean }> = []
+    const artifacts: Array<{ id: string; name: string; hasCode: boolean; mode: "react" | "vanilla" }> = []
 
     for (const entry of entries) {
       if (entry.isDirectory() && !entry.name.startsWith("_") && !entry.name.startsWith(".")) {
-        const appPath = join(CANVAS_DIR, entry.name, "App.jsx")
-        let hasCode = false
-        try {
-          await stat(appPath)
-          hasCode = true
-        } catch {
-          // No App.jsx in this folder
-        }
-        if (hasCode) {
+        const mode = await detectCanvasMode(CANVAS_DIR, entry.name)
+        if (mode) {
           artifacts.push({
             id: entry.name,
             name: entry.name,
-            hasCode,
+            hasCode: true,
+            mode,
           })
         }
       }
@@ -352,16 +351,30 @@ app.get("/", (c) => {
         <div class="message">
           <h1>Browser Canvas</h1>
           <p>No active canvases. Create one by writing to:</p>
-          <p><code>${CANVAS_DIR}/&lt;name&gt;/App.jsx</code></p>
+          <p><code>${CANVAS_DIR}/&lt;name&gt;/App.jsx</code> (React)</p>
+          <p><code>${CANVAS_DIR}/&lt;name&gt;/index.html</code> (Vanilla)</p>
         </div>
       </body>
     </html>
   `)
 })
 
-// Canvas page
+// Canvas page - supports both React (App.jsx) and Vanilla (index.html) modes
 app.get("/canvas/:id", async (c) => {
   const canvasId = c.req.param("id")
+  const mode = await detectCanvasMode(CANVAS_DIR, canvasId)
+
+  // Vanilla mode: serve index.html with bridge injection
+  if (mode === "vanilla") {
+    const html = await readVanillaCanvas(CANVAS_DIR, canvasId)
+    if (html) {
+      const wsUrl = `ws://${HOST}:${serverPort}/ws/${canvasId}`
+      const injected = injectVanillaBridge(html, canvasId, wsUrl)
+      return c.html(injected)
+    }
+  }
+
+  // React mode (default): serve React shell
   const code = await readCanvasCode(canvasId)
 
   // Even if canvas doesn't exist yet, render the shell
@@ -388,6 +401,17 @@ app.get("/canvas/:id", async (c) => {
       </body>
     </html>
   `)
+})
+
+// Serve base.css for vanilla mode
+app.get("/base.css", async (c) => {
+  const cssPath = join(SERVER_ROOT, "vanilla", "base.css")
+  try {
+    const css = await readFile(cssPath, "utf-8")
+    return c.text(css, { headers: { "Content-Type": "text/css" } })
+  } catch {
+    return c.text("/* base.css not found */", 404, { headers: { "Content-Type": "text/css" } })
+  }
 })
 
 // Serve static files from dist/

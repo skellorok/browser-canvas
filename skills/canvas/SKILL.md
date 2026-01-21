@@ -1,13 +1,40 @@
 ---
 name: canvas
 description: |
-  Render interactive React UIs in a browser window using file operations.
+  Render interactive UIs in a browser window using file operations.
+  Supports two modes: React (App.jsx) for rapid prototyping with pre-built components,
+  and Vanilla (index.html) for standards-based, portable artifacts.
   Use when users ask to: show forms, render charts/graphs, create dashboards,
   display data tables, build visual interfaces, or show any UI component.
   Trigger phrases: "show me", "render", "display", "create a form/chart/table/dashboard".
 ---
 
 # Browser Canvas
+
+## Choosing a Mode
+
+The server auto-detects the mode based on filename:
+
+| File | Mode | Best For |
+|------|------|----------|
+| `App.jsx` | React | Rapid prototyping, complex forms, dashboards with charts |
+| `index.html` | Vanilla | Portable artifacts, standards-based code, durability |
+
+### React Mode (App.jsx)
+- Pre-bundled shadcn/ui components (Button, Card, Dialog, etc.)
+- Tailwind CSS styling
+- useState/useEffect reactivity
+- Recharts for data visualization
+- Hot-reload preserves state
+
+### Vanilla Mode (index.html)
+- Standards-based HTML/CSS/JS
+- Native HTML elements (`<dialog>`, `<details>`, `<select>`, `<input type="date">`)
+- Web components for composition
+- CSS variables for styling
+- Import maps for libraries (Chart.js, etc.)
+- No build step - files served directly
+- Portable - works without the server
 
 ## Setup
 
@@ -55,9 +82,115 @@ function App() {
 
 The server auto-detects the new folder and opens a browser tab.
 
+## Creating a Vanilla Canvas
+
+Write an `index.html` file to a new folder:
+
+```html
+<!-- Write to: .claude/artifacts/my-app/index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>My App</title>
+  <link rel="stylesheet" href="/base.css">
+  <style>
+    /* Canvas-specific styles */
+    .container { padding: var(--space-6); max-width: 32rem; margin: 0 auto; }
+  </style>
+</head>
+<body>
+  <main class="container">
+    <article class="card">
+      <header class="card-header"><h2>Hello World</h2></header>
+      <div class="card-body">
+        <p>This renders in the browser!</p>
+        <button id="action">Click Me</button>
+      </div>
+    </article>
+  </main>
+
+  <script type="module">
+    document.getElementById('action').onclick = () => {
+      window.canvasEmit('clicked', { timestamp: Date.now() })
+    }
+  </script>
+</body>
+</html>
+```
+
+### Vanilla CSS Variables (from base.css)
+
+```css
+--color-bg, --color-fg, --color-muted, --color-primary
+--color-border, --color-input, --color-danger, --color-success
+--space-1 (0.25rem) through --space-8 (2rem)
+--radius-sm, --radius, --radius-lg
+--shadow-sm, --shadow, --shadow-lg
+```
+
+### Vanilla Utility Classes
+
+```css
+.card, .card-header, .card-body, .card-footer
+.flex, .flex-col, .items-center, .justify-between, .gap-2, .gap-4
+.text-sm, .text-muted, .font-medium, .font-bold
+button, button.secondary, button.danger, button.ghost
+```
+
+### Using Libraries in Vanilla Mode
+
+Use import maps for external libraries:
+
+```html
+<script type="importmap">
+{
+  "imports": {
+    "chart.js": "https://cdn.jsdelivr.net/npm/chart.js@4/auto/+esm",
+    "marked": "https://cdn.jsdelivr.net/npm/marked@15/+esm"
+  }
+}
+</script>
+
+<script type="module">
+  import Chart from 'chart.js'
+  import { marked } from 'marked'
+  // Use the libraries
+</script>
+```
+
+### Web Components in Vanilla Mode
+
+Define reusable components inline:
+
+```html
+<script>
+  class StatCard extends HTMLElement {
+    connectedCallback() {
+      const value = this.getAttribute('value')
+      const label = this.getAttribute('label')
+      this.innerHTML = `
+        <article class="card" style="padding: var(--space-4);">
+          <div style="font-size: var(--text-2xl); font-weight: 700; color: var(--color-primary);">${value}</div>
+          <div style="font-size: var(--text-sm); color: var(--color-muted);">${label}</div>
+        </article>
+      `
+    }
+  }
+  customElements.define('stat-card', StatCard)
+</script>
+
+<!-- Use it -->
+<stat-card value="$1,234" label="Revenue"></stat-card>
+```
+
 ## Updating a Canvas
 
-Edit the `App.jsx` file using the Edit tool. The browser hot-reloads automatically.
+Edit the `App.jsx` or `index.html` file using the Edit tool. The browser hot-reloads automatically.
+
+- **React mode:** Hot-reload preserves component state
+- **Vanilla mode:** Full page refresh on change
 
 ## Automatic Validation Feedback
 
@@ -609,14 +742,20 @@ Artifacts are stored in `.claude/artifacts/` by default (version-controllable):
 .claude/artifacts/
 ├── server.json                 # Server state (port, active canvases)
 ├── _server.log                 # Server logs
-├── my-form/                    # Canvas folder
-│   ├── App.jsx                 # Component code (you write this)
-│   ├── _log.jsonl              # Unified log: events, notices, errors (server writes)
+├── my-form/                    # React canvas
+│   ├── App.jsx                 # React component (you write this)
+│   ├── _log.jsonl              # Unified log: events, notices, errors
 │   ├── _state.json             # Two-way state (you + canvas write)
 │   └── _screenshot.png         # Screenshot output (API writes)
-└── data-viz/
-    └── App.jsx
+├── data-viz/
+│   └── App.jsx                 # Another React canvas
+└── my-dashboard/               # Vanilla canvas
+    ├── index.html              # HTML/CSS/JS (you write this)
+    ├── _log.jsonl              # Same log format as React
+    └── _state.json             # Same state sync as React
 ```
+
+Both modes use the same file protocol for events, state, and screenshots.
 
 ## Browser Toolbar
 

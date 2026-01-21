@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dashboard</title>
+  <link rel="stylesheet" href="/base.css">
+  <style>
+    .dashboard {
+      display: grid;
+      gap: var(--space-6);
+      padding: var(--space-6);
+      max-width: 64rem;
+      margin: 0 auto;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: var(--space-4);
+    }
+
+    .stat-card {
+      padding: var(--space-4);
+    }
+
+    .stat-value {
+      font-size: var(--text-2xl);
+      font-weight: 700;
+      color: var(--color-primary);
+    }
+
+    .stat-label {
+      font-size: var(--text-sm);
+      color: var(--color-muted);
+    }
+
+    .filters {
+      display: flex;
+      gap: var(--space-4);
+      flex-wrap: wrap;
+      align-items: end;
+    }
+
+    .filter-group {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-1);
+    }
+
+    .filter-group input,
+    .filter-group select {
+      width: auto;
+      min-width: 150px;
+    }
+
+    .actions {
+      display: flex;
+      gap: var(--space-2);
+      margin-left: auto;
+    }
+  </style>
+</head>
+<body>
+  <main class="dashboard">
+    <header>
+      <h1>Sales Dashboard</h1>
+      <p class="text-muted">Overview of your business metrics</p>
+    </header>
+
+    <section class="stats">
+      <article class="card stat-card">
+        <div class="stat-value" id="revenue">$0</div>
+        <div class="stat-label">Revenue</div>
+      </article>
+      <article class="card stat-card">
+        <div class="stat-value" id="orders">0</div>
+        <div class="stat-label">Orders</div>
+      </article>
+      <article class="card stat-card">
+        <div class="stat-value" id="customers">0</div>
+        <div class="stat-label">Customers</div>
+      </article>
+      <article class="card stat-card">
+        <div class="stat-value" id="conversion">0%</div>
+        <div class="stat-label">Conversion Rate</div>
+      </article>
+    </section>
+
+    <section class="card">
+      <header class="card-header flex items-center justify-between">
+        <h2>Recent Orders</h2>
+        <div class="filters">
+          <div class="filter-group">
+            <label for="date-from">From</label>
+            <input type="date" id="date-from">
+          </div>
+          <div class="filter-group">
+            <label for="date-to">To</label>
+            <input type="date" id="date-to">
+          </div>
+          <div class="filter-group">
+            <label for="status">Status</label>
+            <select id="status">
+              <option value="">All</option>
+              <option value="pending">Pending</option>
+              <option value="shipped">Shipped</option>
+              <option value="delivered">Delivered</option>
+            </select>
+          </div>
+          <div class="actions">
+            <button id="filter-btn" class="secondary">Filter</button>
+            <button id="export-btn">Export</button>
+          </div>
+        </div>
+      </header>
+      <div class="card-body" style="padding: 0;">
+        <table>
+          <thead>
+            <tr>
+              <th>Order ID</th>
+              <th>Customer</th>
+              <th>Amount</th>
+              <th>Status</th>
+              <th>Date</th>
+            </tr>
+          </thead>
+          <tbody id="orders-table"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <header class="card-header">
+        <h2>Quick Actions</h2>
+      </header>
+      <div class="card-body">
+        <details>
+          <summary>Add New Order</summary>
+          <form id="new-order-form" style="display: grid; gap: var(--space-4); margin-top: var(--space-4);">
+            <div class="filter-group">
+              <label for="customer-name">Customer Name</label>
+              <input type="text" id="customer-name" required>
+            </div>
+            <div class="filter-group">
+              <label for="amount">Amount</label>
+              <input type="number" id="amount" min="0" step="0.01" required>
+            </div>
+            <button type="submit">Create Order</button>
+          </form>
+        </details>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="confirm-dialog">
+    <form method="dialog">
+      <h3>Confirm Export</h3>
+      <p>Export <span id="export-count">0</span> orders to CSV?</p>
+      <footer class="flex gap-2" style="margin-top: var(--space-4);">
+        <button value="cancel" class="secondary">Cancel</button>
+        <button value="confirm">Export</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <script type="module">
+    // Sample data
+    const orders = [
+      { id: "ORD-001", customer: "Alice Johnson", amount: 125.00, status: "delivered", date: "2024-01-15" },
+      { id: "ORD-002", customer: "Bob Smith", amount: 89.50, status: "shipped", date: "2024-01-16" },
+      { id: "ORD-003", customer: "Carol White", amount: 234.00, status: "pending", date: "2024-01-17" },
+      { id: "ORD-004", customer: "David Brown", amount: 56.75, status: "delivered", date: "2024-01-18" },
+      { id: "ORD-005", customer: "Eve Davis", amount: 178.25, status: "shipped", date: "2024-01-19" }
+    ]
+
+    // Initialize state
+    let state = await window.canvasState()
+    if (!state.orders) {
+      state = { orders, filter: {} }
+      await window.canvasState(state)
+    }
+
+    // Update stats
+    function updateStats() {
+      const total = state.orders.reduce((sum, o) => sum + o.amount, 0)
+      document.getElementById("revenue").textContent = `$${total.toFixed(2)}`
+      document.getElementById("orders").textContent = state.orders.length
+      document.getElementById("customers").textContent = new Set(state.orders.map(o => o.customer)).size
+      document.getElementById("conversion").textContent = "3.2%"
+    }
+
+    // Render orders table
+    function renderOrders() {
+      const tbody = document.getElementById("orders-table")
+      const filtered = filterOrders(state.orders, state.filter)
+
+      tbody.innerHTML = filtered.map(order => `
+        <tr>
+          <td><code>${order.id}</code></td>
+          <td>${order.customer}</td>
+          <td>$${order.amount.toFixed(2)}</td>
+          <td><span class="status-${order.status}">${order.status}</span></td>
+          <td>${order.date}</td>
+        </tr>
+      `).join("")
+    }
+
+    function filterOrders(orders, filter) {
+      return orders.filter(o => {
+        if (filter.status && o.status !== filter.status) return false
+        if (filter.from && o.date < filter.from) return false
+        if (filter.to && o.date > filter.to) return false
+        return true
+      })
+    }
+
+    // Filter button
+    document.getElementById("filter-btn").addEventListener("click", async () => {
+      state.filter = {
+        from: document.getElementById("date-from").value || null,
+        to: document.getElementById("date-to").value || null,
+        status: document.getElementById("status").value || null
+      }
+      await window.canvasState(state)
+      renderOrders()
+      window.canvasEmit("filter-applied", state.filter)
+    })
+
+    // Export button
+    const dialog = document.getElementById("confirm-dialog")
+    document.getElementById("export-btn").addEventListener("click", () => {
+      const count = filterOrders(state.orders, state.filter).length
+      document.getElementById("export-count").textContent = count
+      dialog.showModal()
+    })
+
+    dialog.addEventListener("close", () => {
+      if (dialog.returnValue === "confirm") {
+        window.canvasEmit("export-requested", {
+          count: filterOrders(state.orders, state.filter).length,
+          filter: state.filter
+        })
+      }
+    })
+
+    // New order form
+    document.getElementById("new-order-form").addEventListener("submit", async (e) => {
+      e.preventDefault()
+      const data = Object.fromEntries(new FormData(e.target))
+      const newOrder = {
+        id: `ORD-${String(state.orders.length + 1).padStart(3, "0")}`,
+        customer: data["customer-name"],
+        amount: parseFloat(data.amount),
+        status: "pending",
+        date: new Date().toISOString().split("T")[0]
+      }
+      state.orders.push(newOrder)
+      await window.canvasState(state)
+      renderOrders()
+      updateStats()
+      e.target.reset()
+      window.canvasEmit("order-created", newOrder)
+    })
+
+    // Listen for external state changes
+    window.addEventListener("canvas-state-change", (e) => {
+      state = e.detail
+      renderOrders()
+      updateStats()
+    })
+
+    // Initial render
+    updateStats()
+    renderOrders()
+  </script>
+</body>
+</html>

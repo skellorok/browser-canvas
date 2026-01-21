@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Counter</title>
+  <link rel="stylesheet" href="/base.css">
+  <style>
+    .counter {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      gap: var(--space-6);
+    }
+
+    .count {
+      font-size: 4rem;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .buttons {
+      display: flex;
+      gap: var(--space-2);
+    }
+  </style>
+</head>
+<body>
+  <main class="counter">
+    <h1>🎯 Counter</h1>
+    <div class="count" id="count">0</div>
+    <div class="buttons">
+      <button id="decrement" class="secondary">−</button>
+      <button id="increment">+</button>
+    </div>
+  </main>
+
+  <script type="module">
+    // Load state
+    let state = await window.canvasState()
+    if (state.count === undefined) {
+      state = { count: 0 }
+      await window.canvasState(state)
+    }
+
+    const countEl = document.getElementById("count")
+
+    function render() {
+      countEl.textContent = state.count
+    }
+
+    document.getElementById("increment").addEventListener("click", async () => {
+      state.count++
+      await window.canvasState(state)
+      render()
+      window.canvasEmit("count-changed", { count: state.count })
+    })
+
+    document.getElementById("decrement").addEventListener("click", async () => {
+      state.count--
+      await window.canvasState(state)
+      render()
+      window.canvasEmit("count-changed", { count: state.count })
+    })
+
+    // External state changes
+    window.addEventListener("canvas-state-change", (e) => {
+      state = e.detail
+      render()
+    })
+
+    render()
+  </script>
+</body>
+</html>

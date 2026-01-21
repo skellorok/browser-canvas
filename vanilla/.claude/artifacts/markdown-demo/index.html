@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Markdown Demo</title>
+  <link rel="stylesheet" href="/base.css">
+
+  <!-- Import map - no build step, just declare dependencies -->
+  <script type="importmap">
+  {
+    "imports": {
+      "marked": "https://cdn.jsdelivr.net/npm/marked@15/+esm",
+      "dompurify": "https://cdn.jsdelivr.net/npm/dompurify@3/+esm"
+    }
+  }
+  </script>
+
+  <style>
+    .editor {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--space-4);
+      height: calc(100vh - 8rem);
+      padding: var(--space-6);
+      max-width: 80rem;
+      margin: 0 auto;
+    }
+    .pane {
+      display: flex;
+      flex-direction: column;
+    }
+    .pane-header {
+      font-weight: 600;
+      margin-bottom: var(--space-2);
+      color: var(--color-muted);
+      font-size: var(--text-sm);
+    }
+    textarea {
+      flex: 1;
+      resize: none;
+      font-family: var(--font-mono);
+      font-size: var(--text-sm);
+    }
+    .preview {
+      flex: 1;
+      overflow: auto;
+      padding: var(--space-4);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius);
+      background: var(--color-bg);
+    }
+    /* Markdown styles */
+    .preview h1 { font-size: var(--text-2xl); margin: 1em 0 0.5em; }
+    .preview h2 { font-size: var(--text-xl); margin: 1em 0 0.5em; }
+    .preview h3 { font-size: var(--text-lg); margin: 1em 0 0.5em; }
+    .preview p { margin: 0.5em 0; }
+    .preview ul, .preview ol { padding-left: 1.5em; margin: 0.5em 0; }
+    .preview code { background: var(--color-input); padding: 0.1em 0.3em; border-radius: 3px; }
+    .preview pre { background: var(--color-input); padding: 1em; border-radius: var(--radius); overflow-x: auto; }
+    .preview pre code { background: none; padding: 0; }
+    .preview blockquote { border-left: 3px solid var(--color-border); padding-left: 1em; color: var(--color-muted); }
+    .preview table { border-collapse: collapse; margin: 1em 0; }
+    .preview th, .preview td { border: 1px solid var(--color-border); padding: 0.5em; }
+  </style>
+</head>
+<body>
+  <div class="editor">
+    <div class="pane">
+      <div class="pane-header">Markdown</div>
+      <textarea id="input"># Hello World
+
+This is a **markdown** editor with *live preview*.
+
+## Features
+
+- Real-time rendering
+- Syntax highlighting for `code`
+- Tables, lists, blockquotes
+
+## Code Example
+
+```javascript
+function greet(name) {
+  return `Hello, ${name}!`
+}
+```
+
+> This is a blockquote
+
+| Feature | Status |
+|---------|--------|
+| Parsing | ✅ |
+| Sanitization | ✅ |
+| Live preview | ✅ |
+</textarea>
+    </div>
+    <div class="pane">
+      <div class="pane-header">Preview</div>
+      <div id="preview" class="preview"></div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { marked } from 'marked'
+    import DOMPurify from 'dompurify'
+
+    const input = document.getElementById('input')
+    const preview = document.getElementById('preview')
+
+    function render() {
+      const html = marked.parse(input.value)
+      preview.innerHTML = DOMPurify.sanitize(html)
+    }
+
+    input.addEventListener('input', render)
+    render() // Initial render
+  </script>
+</body>
+</html>
