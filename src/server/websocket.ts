@@ -91,6 +91,19 @@ export function sendReload(canvasId: string, code: string): void {
   }
 }
 
+// For vanilla mode - just sends reload signal without code (browser will fetch fresh HTML)
+export function sendVanillaReload(canvasId: string): void {
+  const set = connections.get(canvasId)
+  if (!set) return
+
+  const message = { type: "reload" }
+
+  const payload = JSON.stringify(message)
+  for (const ws of set) {
+    ws.send(payload)
+  }
+}
+
 export function requestScreenshot(canvasId: string): void {
   const set = connections.get(canvasId)
   if (!set) return

@@ -1,17 +1,41 @@
 import chokidar, { type FSWatcher } from "chokidar"
 import { readFile, stat } from "fs/promises"
-import { basename, dirname } from "path"
+import { basename, dirname, join } from "path"
 import {
   openCanvas,
   hasCanvas,
   closeCanvas,
   readCanvasCode,
 } from "./canvas-manager"
-import { sendReload, sendStateUpdate } from "./websocket"
+import { sendReload, sendStateUpdate, sendVanillaReload } from "./websocket"
 import { prependComponents, getScopeIdentifiers } from "./component-loader"
 import { runServerValidators } from "./validators"
 import { clearLog, appendLogs, summarizeNotices, type NoticeLogEntry } from "./log"
 import { recordValidation, markValidationPending } from "./validation-status"
+
+// Canvas mode detection
+type CanvasMode = "react" | "vanilla"
+
+function detectCanvasModeSync(canvasPath: string): CanvasMode | null {
+  const jsxPath = join(canvasPath, "App.jsx")
+  const htmlPath = join(canvasPath, "index.html")
+
+  try {
+    require("fs").accessSync(jsxPath)
+    return "react"
+  } catch {
+    // App.jsx doesn't exist
+  }
+
+  try {
+    require("fs").accessSync(htmlPath)
+    return "vanilla"
+  } catch {
+    // Neither exists
+  }
+
+  return null
+}
 
 const DEBOUNCE_MS = 100
 const debounceTimers = new Map<string, ReturnType<typeof setTimeout>>()
@@ -66,6 +90,12 @@ async function handleStateChange(canvasId: string, statePath: string): Promise<v
   } catch (error) {
     console.error(`Error reading state file for ${canvasId}:`, error)
   }
+}
+
+async function handleIndexHtmlChange(canvasId: string, watchPath: string): Promise<void> {
+  // For vanilla mode, just send a reload signal - browser will fetch fresh HTML
+  sendVanillaReload(canvasId)
+  console.log(`Canvas ${canvasId} (vanilla): reloading`)
 }
 
 async function handleNewCanvas(
@@ -157,7 +187,7 @@ export function startWatcher(options: WatcherOptions): FSWatcher {
       return
     }
 
-    if (fileName === "App.jsx") {
+    if (fileName === "App.jsx" || fileName === "index.html") {
       if (isInitialScan) {
         // During initial scan, collect synchronously (no debounce)
         initialCanvasPaths.push({ canvasId, canvasPath, filePath })
@@ -191,6 +221,11 @@ export function startWatcher(options: WatcherOptions): FSWatcher {
       debounce(`change-${canvasId}`, () => {
         handleAppJsxChange(canvasId, watchPath)
       })
+    } else if (fileName === "index.html") {
+      // Vanilla mode - just trigger reload
+      debounce(`change-${canvasId}`, () => {
+        handleIndexHtmlChange(canvasId, watchPath)
+      })
     } else if (fileName === "_state.json") {
       // State file changed - send to browser
       debounce(`state-${canvasId}`, () => {
@@ -209,8 +244,8 @@ export function startWatcher(options: WatcherOptions): FSWatcher {
       return
     }
 
-    if (fileName === "App.jsx") {
-      // App.jsx was deleted, close the canvas
+    if (fileName === "App.jsx" || fileName === "index.html") {
+      // Canvas file was deleted, close the canvas
       if (hasCanvas(canvasId)) {
         closeCanvas(canvasId)
         console.log(`Canvas closed (file deleted): ${canvasId}`)

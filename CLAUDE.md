@@ -11,6 +11,7 @@ browser-canvas/
 │   │   ├── watcher.ts           # File system watcher (chokidar)
 │   │   ├── websocket.ts         # WebSocket handler
 │   │   ├── canvas-manager.ts    # Canvas instance state
+│   │   ├── vanilla.ts           # Vanilla mode: bridge injection, detection
 │   │   ├── component-loader.ts  # Reusable component loading
 │   │   ├── scope-builder.ts     # Dynamic scope bundling
 │   │   ├── tailwind-builder.ts  # Dynamic CSS building
@@ -18,13 +19,15 @@ browser-canvas/
 │   │   ├── validation-status.ts # Validation state for status API
 │   │   └── log.ts               # Unified log system
 │   └── browser/
-│       ├── index.html           # Canvas shell
+│       ├── index.html           # React canvas shell
 │       ├── app.tsx              # React app with react-runner
 │       ├── scope.ts             # Pre-bundled dependencies
 │       ├── event-bridge.ts      # window.canvasEmit implementation
 │       ├── use-canvas-state.ts  # Two-way state sync hook
 │       ├── linter.ts            # axe-core, overflow, image validation
 │       └── components/ui/       # shadcn components
+├── vanilla/
+│   └── base.css                 # CSS variables and utilities for vanilla mode
 ├── skills/
 │   └── canvas/
 │       ├── SKILL.md             # Claude instructions
@@ -40,14 +43,26 @@ browser-canvas/
 
 ## Key Architecture
 
+### Dual-Mode Support
+
+The server auto-detects canvas mode by filename:
+
+| File | Mode | Stack |
+|------|------|-------|
+| `App.jsx` | React | shadcn/ui + Tailwind + React hooks |
+| `index.html` | Vanilla | Pure HTML/CSS/JS, CSS variables |
+
+Both modes share the same file protocol, WebSocket bridge, and API.
+
 ### File-Based Protocol
 
 Claude interacts via filesystem for data:
 
 | Claude Action | File Operation |
 |---------------|----------------|
-| Create canvas | Write `App.jsx` to new folder |
-| Update canvas | Edit `App.jsx` |
+| Create React canvas | Write `App.jsx` to new folder |
+| Create Vanilla canvas | Write `index.html` to new folder |
+| Update canvas | Edit `App.jsx` or `index.html` |
 | Read log | Read `_log.jsonl` (grep for type/severity/category) |
 | Read/write state | Read/write `_state.json` |
 
@@ -71,14 +86,34 @@ await client.health()              // Check server health
 
 ```typescript
 // Server → Browser
-{ type: "reload", code: string }
+{ type: "reload", code: string }  // React: includes code; Vanilla: code omitted
 { type: "screenshot-request" }
 
 // Browser → Server
 { type: "event", event: string, data: unknown }
 { type: "screenshot", dataUrl: string }
 { type: "error", message: string }
+{ type: "set-state", state: Record<string, unknown> }
 ```
+
+### Vanilla Mode Architecture
+
+Vanilla canvases serve `index.html` with an injected bridge script:
+
+```
+src/server/vanilla.ts
+├── detectCanvasMode()      # Check for App.jsx vs index.html
+├── readVanillaCanvas()     # Read index.html from disk
+└── injectVanillaBridge()   # Inject WebSocket bridge into HTML
+```
+
+The bridge provides:
+- `window.canvasEmit(event, data)` - Send events to log
+- `window.canvasState(newState?)` - Get/set two-way state
+- Auto-reconnecting WebSocket
+- Hot-reload on file change (full page refresh)
+
+Styling via `/base.css` route serving `vanilla/base.css` with CSS variables.
 
 ### PostToolUse Hook (Validation Feedback)
 
@@ -180,17 +215,23 @@ Default: `.claude/artifacts/` in current directory:
 .claude/artifacts/
 ├── server.json              # Server state (port, active canvases)
 ├── _server.log              # Server logs
-└── <canvas-name>/
-    ├── App.jsx              # Component code
-    ├── _log.jsonl           # Unified log (events, errors, validation)
-    ├── _state.json          # Two-way state
-    └── _screenshot.png      # Screenshot output (via API)
+├── react-app/               # React mode canvas
+│   ├── App.jsx              # React component code
+│   ├── _log.jsonl           # Unified log (events, errors, validation)
+│   ├── _state.json          # Two-way state
+│   └── _screenshot.png      # Screenshot output (via API)
+└── vanilla-app/             # Vanilla mode canvas
+    ├── index.html           # HTML/CSS/JS code
+    ├── _log.jsonl           # Same log format
+    ├── _state.json          # Same state sync
+    └── _screenshot.png      # Same screenshot API
 ```
 
 ## Testing
 
 Manual testing:
 
+**React Mode:**
 1. Start server: `./server.sh`
 2. Create test canvas: write to `.claude/artifacts/test/App.jsx`
 3. Verify browser opens and renders
@@ -198,6 +239,14 @@ Manual testing:
 5. Test events with `window.canvasEmit()`
 6. Test screenshots via `CanvasClient.screenshot()`
 7. Check `_log.jsonl` for validation notices
+
+**Vanilla Mode:**
+1. Create test canvas: write to `.claude/artifacts/vanilla-test/index.html`
+2. Include `<link rel="stylesheet" href="/base.css">` for styling
+3. Verify browser opens and renders
+4. Test hot-reload (full page refresh on change)
+5. Test `window.canvasEmit()` and `window.canvasState()`
+6. Verify state sync via `_state.json`
 
 ## Code Style
 
