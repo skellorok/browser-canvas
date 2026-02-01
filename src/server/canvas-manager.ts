@@ -27,6 +27,11 @@ export interface OpenCanvasOptions {
   openBrowser?: boolean
 }
 
+// Check if browser opening is disabled via BROWSER=none env var
+function shouldOpenBrowser(): boolean {
+  return process.env.BROWSER !== "none"
+}
+
 export async function openCanvas(
   id: string,
   path: string,
@@ -45,8 +50,8 @@ export async function openCanvas(
 
   canvases.set(id, canvas)
 
-  // Open browser tab using macOS `open` command (unless disabled)
-  if (openBrowser) {
+  // Open browser tab (unless disabled via option or BROWSER=none env var)
+  if (openBrowser && shouldOpenBrowser()) {
     exec(`open "${url}"`, (error) => {
       if (error) {
         console.error(`Failed to open browser for canvas ${id}:`, error.message)

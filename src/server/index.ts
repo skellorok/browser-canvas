@@ -52,9 +52,16 @@ import {
   detectCanvasMode,
 } from "./vanilla"
 
-// Port 0 = OS assigns available port; actual port captured after server starts
-let serverPort = 0
-const HOST = "127.0.0.1"
+// Port can be set via env var for stable Tailscale serve config, or 0 for OS-assigned
+let serverPort = parseInt(process.env.PORT || "0", 10)
+// HOST can be overridden via env var (use 0.0.0.0 to allow external access)
+const HOST = process.env.HOST || "127.0.0.1"
+// CLIENT_HOST is what browsers connect to - can be set explicitly for remote access
+// Falls back to HOST, but 0.0.0.0 is replaced with 127.0.0.1 (not connectable)
+const CLIENT_HOST = process.env.CLIENT_HOST || (HOST === "0.0.0.0" ? "127.0.0.1" : HOST)
+// CLIENT_PROTOCOL: "https" for Tailscale serve/reverse proxy with TLS, "http" for direct access
+const CLIENT_PROTOCOL = process.env.CLIENT_PROTOCOL || "http"
+const WS_PROTOCOL = CLIENT_PROTOCOL === "https" ? "wss" : "ws"
 
 // Resolve the canvas directory - defaults to .claude/artifacts in cwd
 function resolveCanvasDir(): string {
@@ -368,7 +375,7 @@ app.get("/canvas/:id", async (c) => {
   if (mode === "vanilla") {
     const html = await readVanillaCanvas(CANVAS_DIR, canvasId)
     if (html) {
-      const wsUrl = `ws://${HOST}:${serverPort}/ws/${canvasId}`
+      const wsUrl = `${WS_PROTOCOL}://${CLIENT_HOST}:${serverPort}/ws/${canvasId}`
       const injected = injectVanillaBridge(html, canvasId, wsUrl)
       return c.html(injected)
     }
@@ -392,7 +399,7 @@ app.get("/canvas/:id", async (c) => {
         <script>
           window.CANVAS_ID = "${canvasId}";
           window.INITIAL_CODE = ${JSON.stringify(initialCode)};
-          window.WS_URL = "ws://${HOST}:${serverPort}/ws/${canvasId}";
+          window.WS_URL = "${WS_PROTOCOL}://${CLIENT_HOST}:${serverPort}/ws/${canvasId}";
         </script>
       </head>
       <body>
